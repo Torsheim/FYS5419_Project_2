@@ -1,0 +1,40 @@
+{
+  "experiment": "binary_iris",
+  "config": {
+    "features": 4,
+    "feature_names": [
+      "sepal length (cm)",
+      "sepal width (cm)",
+      "petal length (cm)",
+      "petal width (cm)"
+    ],
+    "target_names": [
+      "setosa",
+      "versicolor"
+    ],
+    "layers": 2,
+    "encoding": "h_rz",
+    "ansatz": "simple",
+    "measured_qubit": 3,
+    "n_parameters": 16,
+    "epochs_requested": 20,
+    "epochs_completed": 20,
+    "learning_rate": 0.05,
+    "optimizer": "adam",
+    "seed": 42
+  },
+  "quantum_model": {
+    "train_loss": 0.39510749543748425,
+    "test_loss": 0.5618518128826687,
+    "train_accuracy": 0.8,
+    "test_accuracy": 0.84
+  },
+  "logistic_regression": {
+    "train_loss": 0.12284164244963458,
+    "test_loss": 0.13299993933797286,
+    "train_accuracy": 1.0,
+    "test_accuracy": 1.0,
+    "n_train": 75.0,
+    "n_test": 25.0
+  }
+}

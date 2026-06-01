@@ -1,0 +1,65 @@
+{
+  "experiment": "iris_variation_study",
+  "config": {
+    "features": 4,
+    "layers": 2,
+    "epochs": 20,
+    "learning_rate": 0.05,
+    "seed": 42
+  },
+  "quantum_models": [
+    {
+      "encoding": "h_rz",
+      "ansatz": "simple",
+      "n_parameters": 16,
+      "train_loss": 0.39510749543748425,
+      "test_loss": 0.5618518128826687,
+      "train_accuracy": 0.8,
+      "test_accuracy": 0.84
+    },
+    {
+      "encoding": "ry",
+      "ansatz": "simple",
+      "n_parameters": 16,
+      "train_loss": 0.12614396998407107,
+      "test_loss": 0.1598892975456578,
+      "train_accuracy": 1.0,
+      "test_accuracy": 1.0
+    },
+    {
+      "encoding": "ry_rz",
+      "ansatz": "simple",
+      "n_parameters": 16,
+      "train_loss": 0.29974729751450546,
+      "test_loss": 0.27867060194253906,
+      "train_accuracy": 0.9733333333333334,
+      "test_accuracy": 0.96
+    },
+    {
+      "encoding": "h_rz",
+      "ansatz": "strong",
+      "n_parameters": 24,
+      "train_loss": 0.3210254888711192,
+      "test_loss": 0.3912806744809862,
+      "train_accuracy": 0.9466666666666667,
+      "test_accuracy": 0.92
+    },
+    {
+      "encoding": "ry_rz",
+      "ansatz": "strong",
+      "n_parameters": 24,
+      "train_loss": 0.34311549094446947,
+      "test_loss": 0.311439526303642,
+      "train_accuracy": 0.9733333333333334,
+      "test_accuracy": 1.0
+    }
+  ],
+  "logistic_regression": {
+    "train_loss": 0.12284164244963458,
+    "test_loss": 0.13299993933797286,
+    "train_accuracy": 1.0,
+    "test_accuracy": 1.0,
+    "n_train": 75.0,
+    "n_test": 25.0
+  }
+}

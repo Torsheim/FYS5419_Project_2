@@ -1,0 +1,29 @@
+{
+  "experiment": "breast_cancer_optional",
+  "config": {
+    "features": 4,
+    "layers": 2,
+    "encoding": "ry_rz",
+    "ansatz": "strong",
+    "epochs": 20,
+    "learning_rate": 0.03,
+    "seed": 42,
+    "results_dir": "results",
+    "verbose": true,
+    "n_parameters": 24
+  },
+  "quantum_model": {
+    "train_loss": 0.43372260035660865,
+    "test_loss": 0.4369098297627527,
+    "train_accuracy": 0.8755868544600939,
+    "test_accuracy": 0.8741258741258742
+  },
+  "logistic_regression": {
+    "train_loss": 0.30166230882078954,
+    "test_loss": 0.2956204363310438,
+    "train_accuracy": 0.8896713615023474,
+    "test_accuracy": 0.8811188811188811,
+    "n_train": 426.0,
+    "n_test": 143.0
+  }
+}
