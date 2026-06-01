@@ -1,0 +1,402 @@
+\documentclass[10pt,a4paper]{article}
+
+% -------------------- Packages --------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\usepackage{amsmath,amssymb,amsfonts,bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{siunitx}
+
+% -------------------- Page setup --------------------
+\geometry{top=1.55cm,bottom=1.65cm,left=1.45cm,right=1.45cm,columnsep=0.68cm}
+\setlength{\parindent}{1.05em}
+\setlength{\parskip}{0pt}
+\graphicspath{{figures/}}
+\captionsetup{font=small, labelfont=bf, justification=justified, singlelinecheck=false}
+\renewcommand{\arraystretch}{1.05}
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\thesubsection}{\Alph{subsection}}
+\definecolor{linkcolor}{rgb}{0,0,0.45}
+\hypersetup{colorlinks=true, linkcolor=linkcolor, citecolor=linkcolor, urlcolor=linkcolor, breaklinks=true}
+\pagestyle{plain}
+\setlist[itemize]{leftmargin=*, topsep=1pt, itemsep=1pt}
+\lstset{basicstyle=\ttfamily\small, breaklines=true, frame=single, columns=fullflexible, keepspaces=true, showstringspaces=false, backgroundcolor=\color{gray!5}}
+
+% -------------------- Commands --------------------
+\newcommand{\ket}[1]{\left|#1\right\rangle}
+\newcommand{\bra}[1]{\left\langle#1\right|}
+\newcommand{\btheta}{\bm{\theta}}
+\newcommand{\bx}{\bm{x}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\reportfigure}[3]{%
+  \begin{center}
+  \begin{minipage}{0.98\columnwidth}
+  \centering
+  \includegraphics[width=\linewidth]{#1}
+  \captionof{figure}{#2}
+  \label{#3}
+  \end{minipage}
+  \end{center}
+}
+
+\begin{document}
+
+\twocolumn[
+\begin{center}
+{\large FYS5419/FYS9419: Quantum Computing and Quantum Machine Learning\par}
+\vspace{0.25cm}
+{\LARGE\bfseries Parameterized Quantum Circuits for Binary Classification\par}
+\vspace{0.12cm}
+{\large Iris classification with parameter-shift training, finite-shot tests, and robustness checks\par}
+\vspace{0.35cm}
+{Marius Torsheim\\Department of Physics, University of Oslo\par}
+\vspace{0.15cm}
+{Spring 2026\par}
+\end{center}
+
+\begin{center}
+\textbf{Abstract}
+\end{center}
+\noindent I implemented a quantum machine-learning classifier for the binary Iris data set using a transparent NumPy state-vector simulator. Each sample is encoded into a four-qubit state, processed by a trainable parameterized circuit, and classified from the probability of measuring the final qubit in the state \(\ket{1}\). Parameters were trained with full-batch Adam and analytical parameter-shift gradients. The basic \(H\)-\(R_z\) encoder with a simple \(R_y\)-CNOT ansatz reached \(0.84\) test accuracy on the selected Iris split, while logistic regression reached \(1.00\). A circuit-variation study showed that the result depends strongly on feature map and ansatz: the \(R_y\)/simple and \(R_yR_z\)/strong quantum circuits reached \(1.00\) test accuracy on the same split. To address the sensitivity of this small data set, I added a repeated-seed study: the mean test accuracies were approximately \(0.804\pm0.053\), \(0.992\pm0.019\), and \(0.956\pm0.045\) for \(H\)-\(R_z\)/simple, \(R_y\)/simple, and \(R_yR_z\)/strong circuits, respectively, compared with \(1.000\pm0.001\) for logistic regression. A finite-shot measurement study showed that 100 shots mainly affects the weaker basic circuit, while 1000 and 10000 shots reproduce the exact-probability conclusions. As an optional extension, the stronger quantum model reached \(0.874\) test accuracy on the first four Breast Cancer features, close to logistic regression at \(0.881\). These results show that small quantum circuits can learn useful classifiers and that circuit design matters, but they do not demonstrate quantum advantage for these small classical data sets.
+
+\vspace{0.25cm}
+\begin{center}
+Repository: \url{https://github.com/Torsheim/FYS5419_Project_2}
+\end{center}
+\vspace{0.45cm}
+]
+
+\section{Introduction}
+Quantum machine learning uses quantum states and parameterized quantum circuits as trainable models for data analysis. The motivation is that an \(n\)-qubit state is described by \(2^n\) complex amplitudes. This large Hilbert space does not automatically imply a practical advantage, because the circuits available in near-term calculations are shallow and highly constrained. A more useful question is therefore whether a small circuit can learn a useful classifier, how sensitive the result is to the chosen feature map and ansatz, and how it compares with a simple classical baseline.
+
+This project studies Alternative 2 of FYS5419 Project 2: quantum machine learning on the first two targets of the Iris data set. The required tasks are to encode classical features into quantum states, add parameterized gates, measure a qubit to obtain predictions, build a model for many samples, train it with the parameter-shift rule, compare with logistic regression, and test circuit variations. I also include the optional Breast Cancer experiment suggested in the project text.
+
+The report follows the same scientific structure as the previous project report: theory and algorithms are presented before results, numerical values are summarized in tables, figures are interpreted in the text, and reproducibility information is included at the end. Section~\ref{sec:theory} defines the circuit model, feature maps, loss function, and parameter-shift gradients. Section~\ref{sec:implementation} describes the code and validation tests. Section~\ref{sec:results} presents the Iris results, circuit variations, repeated-seed robustness, finite-shot measurements, and the optional Breast Cancer extension. Section~\ref{sec:conclusion} summarizes the conclusions and limitations.
+
+\section{Theory}\label{sec:theory}
+\subsection{State-vector circuit model}
+The circuit is simulated as a pure state vector
+\begin{equation}
+  \ket{\psi}=\sum_{z=0}^{2^n-1} c_z\ket{z}, \qquad \sum_z |c_z|^2=1,
+\end{equation}
+where \(n\) is the number of qubits. The initial state is \(\ket{0}^{\otimes n}\). Single-qubit gates and CNOTs are applied directly to the state vector. For example,
+\begin{equation}
+R_y(\alpha)=
+\begin{pmatrix}
+\cos(\alpha/2) & -\sin(\alpha/2)\\
+\sin(\alpha/2) & \cos(\alpha/2)
+\end{pmatrix},
+\end{equation}
+and
+\begin{equation}
+R_z(\alpha)=
+\begin{pmatrix}
+e^{-i\alpha/2} & 0\\
+0 & e^{i\alpha/2}
+\end{pmatrix}.
+\end{equation}
+The code uses one consistent little-endian convention for indexing basis states. This affects only how state-vector indices are mapped to qubit labels, not the physical probabilities.
+
+\subsection{Feature maps and trainable circuits}
+For a scaled input vector \(\bx=(x_1,\ldots,x_n)\), the basic feature map is
+\begin{equation}
+  \ket{0}\mapsto R_z(2\pi x_j)H\ket{0}
+\end{equation}
+for each qubit \(j\). I call this the \code{h\_rz} encoder. The variation study also uses
+\begin{align}
+  \code{ry}:        &\quad \ket{0}\mapsto R_y(2\pi x_j)\ket{0},\\
+  \code{ry\_rz}:   &\quad \ket{0}\mapsto R_z(2\pi x_j)R_y(\pi x_j)H\ket{0}.
+\end{align}
+The simple ansatz repeats \(R_y\) rotations and nearest-neighbour CNOT chains. With \(L\) layers and \(n\) qubits it contains
+\begin{equation}
+  N_\theta^{\mathrm{simple}}=2Ln
+\end{equation}
+trainable parameters. The stronger ansatz applies \(R_y\) and \(R_z\) rotations, a CNOT ring, and \(R_x\) rotations, giving
+\begin{equation}
+  N_\theta^{\mathrm{strong}}=3Ln.
+\end{equation}
+For the reported four-feature, two-layer experiments, the simple and strong circuits have 16 and 24 parameters respectively.
+
+\subsection{Prediction, loss, and parameter shift}
+The classifier output is the probability of measuring the selected qubit in state \(\ket{1}\):
+\begin{equation}
+  f(\bx;\btheta)=P(q_m=1\mid\bx,\btheta)
+  =\sum_{z:\,z_m=1}|c_z(\bx,\btheta)|^2 .
+\end{equation}
+The predicted class is \(\hat y=1\) if \(f\ge 0.5\). The loss function is the mean binary cross-entropy,
+\begin{equation}\label{eq:bce}
+  L(\btheta)=-\frac{1}{N}\sum_{i=1}^{N}\left[y_i\log f_i+(1-y_i)\log(1-f_i)\right],
+\end{equation}
+where \(f_i=f(\bx_i;\btheta)\). Small numerical clipping is used only to avoid evaluating \(\log 0\).
+
+For Pauli rotations the derivative of the model output is computed with the parameter-shift rule,
+\begin{equation}\label{eq:shift}
+\frac{\partial f(\bx;\btheta)}{\partial \theta_j}
+=\frac{f(\bx;\btheta_j^+)-f(\bx;\btheta_j^-)}{2},
+\end{equation}
+where \(\btheta_j^\pm\) means shifting parameter \(j\) by \(\pm\pi/2\). Combining Eqs.~\eqref{eq:bce} and~\eqref{eq:shift} gives
+\begin{equation}\label{eq:lossgrad}
+\frac{\partial L}{\partial \theta_j}
+=\frac{1}{N}\sum_{i=1}^{N}
+\frac{f_i-y_i}{f_i(1-f_i)}
+\frac{\partial f_i}{\partial \theta_j}.
+\end{equation}
+The reported runs use full-batch Adam. Gradient descent is implemented but was less stable for this small experiment.
+
+\subsection{Finite-shot measurement}
+The main training runs use exact probabilities from the state vector. To mimic a measurement-based circuit run, I also evaluate finite-shot estimates after training. For a sample with exact probability \(p_i\), a shot-based estimate is
+\begin{equation}
+  \hat p_i=\frac{k_i}{S}, \qquad k_i\sim\mathrm{Binomial}(S,p_i),
+\end{equation}
+where \(S\) is the number of shots. The finite-shot study repeats this sampling for \(S=100,1000,10000\) and reports mean and standard deviation of accuracy and loss. The training is kept exact in this study, so the experiment isolates measurement noise rather than optimizer noise.
+
+\section{Implementation and validation}\label{sec:implementation}
+\subsection{Code structure}
+The implementation is a Python package in the repository \code{src/} directory. The central files are:
+\begin{itemize}
+\item \code{quantum\_state.py}: gates, CNOT, state-vector evolution, exact and shot-based measurement;
+\item \code{model.py}: encoders, ansaetze, prediction probabilities, binary cross-entropy, and parameter-shift gradients;
+\item \code{data.py}: Iris and Breast Cancer loading, stratified splitting, and scaling;
+\item \code{optimizers.py}: Adam and gradient descent;
+\item \code{baselines.py}: logistic-regression comparison.
+\end{itemize}
+The scripts reproduce the main Iris experiment, the circuit-variation study, the Breast Cancer extension, the repeated-seed study, and the finite-shot study. The generated metrics and figures are saved in \code{results/} and \code{figures/}.
+
+I used a NumPy state-vector simulator rather than Qiskit or PennyLane in the training code. This keeps the implementation transparent: the submitted code contains the actual gate application, probability evaluation, sampling, loss, and gradient computations. This also makes the parameter-shift rule easy to test against finite differences.
+
+\subsection{Data preprocessing and tests}
+The Iris experiment uses the first two Iris targets, giving a binary problem. The main split is a stratified 75/25 split with random seed 42. Features are scaled to \([0,1]\) using only the training data, since features are converted into rotation angles. The optional Breast Cancer run uses the first four features and the same scaling procedure.
+
+The test suite checks the most important numerical components. Hadamard and \(R_y(\pi)\) tests validate one-qubit gates, a CNOT test validates two-qubit indexing, model tests check prediction shapes and probabilities, the simple ansatz parameter count is verified, parameter-shift gradients are compared with finite differences, and a short two-epoch training smoke test checks that optimization produces finite losses. These tests validate the implementation, although they do not prove that a particular circuit is optimal.
+
+\section{Results and discussion}\label{sec:results}
+\subsection{Basic Iris classifier}
+The main Iris run used four features, two ansatz layers, the \code{h\_rz} encoder, the simple ansatz, Adam with learning rate \(0.05\), and 20 epochs. Figure~\ref{fig:iris-loss} shows that the train loss decreases from about 0.71 to 0.40, while the test loss decreases more slowly and ends near 0.56. This is a useful learning signal, but it also shows a train-test gap.
+
+\reportfigure{clean_iris_h_rz_simple_4features_2layers_loss.png}{Training and test binary cross-entropy for the basic Iris quantum classifier. The train loss decreases strongly, while the test loss decreases more slowly.}{fig:iris-loss}
+
+The accuracy curve in Fig.~\ref{fig:iris-acc} saturates at 0.84 on the test set. Since the test set has 25 points, this corresponds to 21 correct classifications. Logistic regression reaches 1.00 on the same split. Table~\ref{tab:iris-main} gives the numerical comparison.
+
+\reportfigure{clean_iris_h_rz_simple_4features_2layers_accuracy.png}{Training and test accuracy for the basic Iris quantum classifier. The final test accuracy is 0.84 for the basic quantum circuit.}{fig:iris-acc}
+
+\begin{center}
+\captionof{table}{Main Iris result. Loss is binary cross-entropy. Logistic regression is a classical baseline on the same train/test split.}
+\label{tab:iris-main}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Model & train acc. & test acc. & test loss \\
+\midrule
+Quantum, \code{h\_rz}/simple & 0.800 & 0.840 & 0.562 \\
+Logistic regression & 1.000 & 1.000 & 0.132 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The confusion matrix in Fig.~\ref{fig:iris-confusion} shows where the errors occur. All 13 class-0 test samples are classified correctly, while four of the 12 class-1 samples are predicted as class 0. Thus the basic circuit does not fail randomly across the two classes; its main weakness is insufficient separation for some class-1 examples.
+
+\reportfigure{clean_iris_confusion_matrix_recreated.png}{Confusion matrix for the basic Iris quantum classifier. The accuracy is \((13+8)/25=0.84\).}{fig:iris-confusion}
+
+\subsection{Encoder and ansatz variations}
+The variation study is one of the most important results, because it tests whether the basic circuit is representative. Figure~\ref{fig:variation-acc} and Table~\ref{tab:variation} show that it is not. Changing only the encoder from \code{h\_rz} to \code{ry} raises the test accuracy from 0.84 to 1.00 on the same split. The \code{ry\_rz}/strong circuit also reaches 1.00 test accuracy, while \code{ry\_rz}/simple and \code{h\_rz}/strong are intermediate.
+
+\reportfigure{clean_iris_variation_study_accuracy.png}{Test accuracy for Iris encoder and ansatz variations. The feature map and ansatz have a large effect on performance.}{fig:variation-acc}
+
+\begin{center}
+\captionof{table}{Iris variation study. All quantum models use four features, two layers, 20 epochs, and the same train/test split.}
+\label{tab:variation}
+\setlength{\tabcolsep}{2.2pt}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Encoder & Ansatz & \(N_\theta\) & acc. & loss \\
+\midrule
+\code{h\_rz} & simple & 16 & 0.84 & 0.56 \\
+\code{ry} & simple & 16 & 1.00 & 0.16 \\
+\code{ry\_rz} & simple & 16 & 0.96 & 0.28 \\
+\code{h\_rz} & strong & 24 & 0.92 & 0.39 \\
+\code{ry\_rz} & strong & 24 & 1.00 & 0.31 \\
+logistic & regression & -- & 1.00 & 0.13 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The loss comparison in Fig.~\ref{fig:variation-loss} adds an important nuance. Even when some quantum circuits reach perfect test accuracy on this small split, logistic regression still has the lowest cross-entropy. The \code{ry} encoder gives the best quantum loss. The results therefore support the conclusion that small quantum circuits can learn the binary Iris task, but not that they are better calibrated or more robust than a classical linear baseline.
+
+\reportfigure{clean_iris_variation_study_loss.png}{Test cross-entropy for the Iris variation study. The \code{ry} feature map gives the best quantum-model loss, while logistic regression remains the lowest-loss model.}{fig:variation-loss}
+
+\subsection{Repeated-seed robustness}
+A single Iris split is not enough to make a strong statistical claim, because one changed test classification changes the accuracy by 0.04. I therefore added a repeated-seed study over several train/test splits and initializations. The results are summarized in Table~\ref{tab:repeated-seed} and Figs.~\ref{fig:repeat-acc}--\ref{fig:repeat-loss}. The basic \code{h\_rz}/simple circuit remains the weakest model on average, with mean test accuracy about \(0.804\). The \code{ry}/simple model is the most robust quantum circuit among the tested choices, with mean test accuracy about \(0.992\) and mean test loss about \(0.143\). Logistic regression remains essentially perfect and has the lowest mean loss.
+
+\begin{center}
+\captionof{table}{Repeated-seed Iris robustness study. Values are mean \(\pm\) standard deviation over the generated repeated-seed runs.}
+\label{tab:repeated-seed}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Model & test acc. & test loss \\
+\midrule
+\code{h\_rz}/simple & \(0.804\pm0.053\) & \(0.433\pm0.045\) \\
+\code{ry}/simple & \(0.992\pm0.019\) & \(0.143\pm0.031\) \\
+\code{ry\_rz}/strong & \(0.956\pm0.045\) & \(0.406\pm0.035\) \\
+logistic regression & \(1.000\pm0.001\) & \(0.126\pm0.011\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\reportfigure{clean_iris_repeated_seed_accuracy.png}{Repeated-seed test accuracy. The \code{ry}/simple circuit is much more stable than the basic \code{h\_rz}/simple circuit, but logistic regression remains the strongest baseline.}{fig:repeat-acc}
+
+\reportfigure{clean_iris_repeated_seed_loss.png}{Repeated-seed test loss. The \code{ry}/simple quantum model has the lowest quantum loss, while logistic regression has the lowest loss overall.}{fig:repeat-loss}
+
+These repeated-seed results strengthen the original variation-study conclusion. The perfect accuracy of a quantum circuit on one split is not by itself strong evidence, but the repeated runs show that the \code{ry} feature map is consistently better than the original \code{h\_rz} feature map for this implementation.
+
+\subsection{Finite-shot measurement}
+The main results use exact state-vector probabilities. This is useful for debugging and optimization, but the project task also emphasizes measurement. The finite-shot study therefore replaces the final test probabilities by binomial measurement estimates with 100, 1000, and 10000 shots. The training remains exact, so the study isolates measurement noise.
+
+\begin{center}
+\captionof{table}{Finite-shot Iris measurement study. Values for finite-shot rows are mean \(\pm\) standard deviation over repeated measurement simulations.}
+\label{tab:shot-noise}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}llcc@{}}
+\toprule
+Model & shots & test acc. & test loss \\
+\midrule
+\code{h\_rz}/simple & exact & 0.840 & 0.562 \\
+ & 100 & \(0.808\pm0.037\) & \(0.568\pm0.026\) \\
+ & 1000 & \(0.840\pm0.002\) & \(0.563\pm0.006\) \\
+ & 10000 & \(0.840\pm0.000\) & \(0.562\pm0.001\) \\
+\code{ry}/simple & exact & 1.000 & 0.158 \\
+ & 100 & \(0.994\pm0.019\) & \(0.161\pm0.007\) \\
+ & 1000 & \(1.000\pm0.001\) & \(0.158\pm0.002\) \\
+ & 10000 & \(1.000\pm0.000\) & \(0.158\pm0.001\) \\
+\code{ry\_rz}/strong & exact & 1.000 & 0.311 \\
+ & 100 & \(0.984\pm0.021\) & \(0.316\pm0.015\) \\
+ & 1000 & \(1.000\pm0.001\) & \(0.312\pm0.004\) \\
+ & 10000 & \(1.000\pm0.000\) & \(0.311\pm0.001\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\reportfigure{clean_iris_shot_noise_accuracy.png}{Finite-shot test accuracy for three quantum circuits. With 100 shots, measurement noise affects the weaker basic circuit most strongly; 1000 and 10000 shots reproduce the exact-probability conclusions.}{fig:shot-acc}
+
+\reportfigure{clean_iris_shot_noise_loss.png}{Finite-shot test loss for the same circuits. Shot noise mainly broadens the 100-shot estimates; the ordering of the circuits is unchanged.}{fig:shot-loss}
+
+The finite-shot results show that the conclusions are not an artifact of exact probability readout. A small number of shots can lower the measured accuracy of borderline circuits, but the better \code{ry}-based circuits remain stable. This directly connects the state-vector simulation to the measurement interpretation of the project.
+
+\subsection{Optional Breast Cancer extension}
+As an optional extension I used the first four Breast Cancer features with the \code{ry\_rz} encoder and strong ansatz. The training curve in Fig.~\ref{fig:breast-acc} shows stable learning, and the final quantum test accuracy was 0.874, close to logistic regression at 0.881. Table~\ref{tab:breast} shows that logistic regression nevertheless has lower loss, indicating better calibrated probabilities.
+
+\reportfigure{clean_breast_cancer_ry_rz_strong_4features_2layers_accuracy.png}{Optional Breast Cancer experiment using the first four features and the \code{ry\_rz}/strong circuit. The quantum model learns a useful classifier and reaches a test accuracy close to logistic regression.}{fig:breast-acc}
+
+\begin{center}
+\captionof{table}{Optional Breast Cancer extension. The quantum model is competitive in accuracy, but logistic regression has lower cross-entropy.}
+\label{tab:breast}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Model & train acc. & test acc. & test loss \\
+\midrule
+Quantum, \code{ry\_rz}/strong & 0.876 & 0.874 & 0.434 \\
+Logistic regression & 0.889 & 0.881 & 0.296 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Reliability and limitations}
+The strongest implementation evidence is the agreement between parameter-shift and finite-difference gradients, the gate tests, and the reproducible result files. The repeated-seed and finite-shot studies improve the original analysis by checking two sources of uncertainty: sensitivity to random splits/initializations and measurement noise.
+
+There are still important limitations. The circuits are very small, the Iris data set is simple, and logistic regression is already nearly ideal. The repeated-seed study reduces but does not eliminate statistical uncertainty, and the finite-shot study applies noise only at final measurement, not during training. The Breast Cancer extension uses only four features and accuracy/loss; a more careful medical-classification study should also include balanced accuracy, precision, recall, and F1 score. The correct conclusion is therefore conservative: the quantum models are implemented and can learn, but there is no evidence of quantum advantage here.
+
+\section{Conclusion}\label{sec:conclusion}
+I implemented a complete quantum machine-learning workflow for binary classification: feature encoding, trainable ansaetze, measurement probabilities, binary cross-entropy, parameter-shift gradients, Adam optimization, logistic-regression comparison, circuit variations, repeated-seed robustness, finite-shot measurements, and an optional Breast Cancer extension.
+
+The basic \code{h\_rz}/simple quantum classifier reached 0.84 test accuracy on the binary Iris split, while logistic regression reached 1.00. The variation study showed that circuit design is decisive: the \code{ry}/simple and \code{ry\_rz}/strong circuits reached 1.00 test accuracy on the same split. The repeated-seed study confirmed that \code{ry}/simple is more robust than the basic \code{h\_rz}/simple design, while logistic regression remains the strongest and lowest-loss baseline. Finite-shot measurements did not change the qualitative conclusions; 100 shots introduces visible uncertainty, but 1000 and 10000 shots are close to exact state-vector readout. The Breast Cancer extension showed that the stronger circuit can be competitive in accuracy on a harder data set, but it still did not beat logistic regression in loss.
+
+The main lesson is not quantum advantage. The main lesson is that parameterized quantum classifiers can be built and trained transparently, that the parameter-shift rule gives a practical analytical gradient, and that feature-map and ansatz choices strongly affect performance. Future work should test more random splits, more circuit depths, more classical baselines, noisy training, and data sets where linear decision boundaries are not already sufficient.
+
+\section*{Declaration of limited AI assistance}
+I used ChatGPT in a limited supporting role during this project. The implementation, numerical experiments, figures, tables, and final scientific interpretation are my own responsibility. The AI assistance was mainly used for repository organization, terminal and Git guidance, plotting/report formatting, and proofreading. I reviewed and edited the suggestions before including them in the final repository and report. All reported values come from the project code and generated result files.
+
+\appendix
+\section{Reproducibility and code organization}
+The main commands used to reproduce the selected results are:
+\begin{lstlisting}
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install -e .
+pytest -q
+python scripts/run_iris_experiment.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05 --verbose
+python scripts/run_variation_study.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05
+python scripts/run_repeated_seed_study.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05
+python scripts/run_shot_noise_study.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05 \
+  --shots 100 1000 10000 --repeats 30
+python scripts/run_breast_cancer_experiment.py \
+  --features 4 --layers 2 --epochs 20 \
+  --learning-rate 0.03 --verbose
+\end{lstlisting}
+A simplified repository overview is:
+\begin{lstlisting}
+FYS5419_Project_2/
+  src/fys5419_project_2/
+    quantum_state.py
+    model.py
+    data.py
+    optimizers.py
+    baselines.py
+  scripts/
+    run_iris_experiment.py
+    run_variation_study.py
+    run_repeated_seed_study.py
+    run_shot_noise_study.py
+    run_breast_cancer_experiment.py
+  tests/
+  figures/
+  results/
+  report/
+\end{lstlisting}
+
+\begin{thebibliography}{9}
+\bibitem{nielsenchuang}
+M. A. Nielsen and I. L. Chuang, \textit{Quantum Computation and Quantum Information}, Cambridge University Press, Cambridge (2000).
+
+\bibitem{schuld2019}
+M. Schuld, V. Bergholm, C. Gogolin, J. Izaac, and N. Killoran, ``Evaluating analytic gradients on quantum hardware,'' \textit{Physical Review A} \textbf{99}, 032331 (2019).
+
+\bibitem{havlicek2019}
+V. Havlicek \textit{et al.}, ``Supervised learning with quantum-enhanced feature spaces,'' \textit{Nature} \textbf{567}, 209--212 (2019).
+
+\bibitem{iris}
+R. A. Fisher, ``The use of multiple measurements in taxonomic problems,'' \textit{Annals of Eugenics} \textbf{7}, 179--188 (1936).
+
+\bibitem{sklearn}
+F. Pedregosa \textit{et al.}, ``Scikit-learn: Machine learning in Python,'' \textit{Journal of Machine Learning Research} \textbf{12}, 2825--2830 (2011).
+
+\bibitem{kingma2015}
+D. P. Kingma and J. Ba, ``Adam: A method for stochastic optimization,'' International Conference on Learning Representations (2015).
+
+\bibitem{project}
+Computational Physics, ``FYS5419/FYS9419 Project 2: Quantum Computing and Quantum Machine Learning,'' University of Oslo, Spring 2026. \url{https://github.com/CompPhysics/QuantumComputingMachineLearning/tree/gh-pages/doc/Projects/2026/Project2}
+
+\bibitem{grading}
+Computational Physics, ``Evaluation and grading of projects,'' University of Oslo. \url{https://github.com/CompPhysics/QuantumComputingMachineLearning/tree/gh-pages/doc/Projects/EvaluationGrading}
+
+\bibitem{examples}
+Computational Physics, ``Project examples and report-writing resources,'' University of Oslo. \url{https://github.com/CompPhysics/QuantumComputingMachineLearning/tree/gh-pages/doc/Projects/ProjectExamples}
+\end{thebibliography}
+
+\end{document}

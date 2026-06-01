@@ -1,71 +1,124 @@
-# FYS5419 Project 2
+# FYS5419 Project 2 - Quantum Machine Learning
 
-Repository skeleton for **FYS5419/9419 - Quantum Computing and Quantum Machine Learning**, Project 2, Spring 2026.
+Repository for **FYS5419/FYS9419 Project 2, Alternative 2: Quantum Machine Learning**.
 
-The repository is set up so you can add code later while keeping the report, figures, results, and reproducibility files organized from the start.
+This project implements a binary quantum classifier for the first two Iris classes using a transparent NumPy state-vector simulator. Classical features are encoded into a quantum state, a trainable parameterized circuit is applied, and the prediction is obtained from the probability of measuring one qubit in the state `|1>`. The parameters are trained with binary cross-entropy, the parameter-shift rule, and Adam. Logistic regression is used as the main classical baseline.
 
-## What is included
+The implementation avoids hiding the circuit behind high-level Qiskit or PennyLane abstractions. The gates, CNOT operations, state-vector evolution, exact measurement probabilities, finite-shot sampling, loss function, parameter-shift gradients, and optimizer are visible in the source code.
+
+## Main results
+
+The report studies:
+
+- the basic Iris classifier with an `h_rz` encoder and simple ansatz,
+- comparison with logistic regression,
+- encoder/ansatz variations,
+- repeated-seed robustness over several random splits and initializations,
+- finite-shot measurement noise with 100, 1000, and 10000 shots,
+- an optional Breast Cancer extension using the first four features.
+
+The basic `h_rz/simple` Iris model reaches about 0.84 test accuracy on the selected split, while logistic regression reaches 1.00. The `ry/simple` and `ry_rz/strong` variants reach 1.00 on the selected split. Repeated-seed and finite-shot studies show that circuit design is important and that 1000-10000 shots preserve the qualitative exact-probability conclusions. These results should not be interpreted as quantum advantage.
+
+## Repository layout
 
 ```text
-FYS5419_Project_2/
-├── docs/                  # Project description PDF and source files
-├── report/                # Scientific report LaTeX template
-├── src/                   # Python package for project code
-├── scripts/               # Command-line entry points / experiments
-├── notebooks/             # Exploration notebooks
-├── data/                  # Optional local data files
-├── results/               # Figures, tables, and numerical output
-├── tests/                 # Smoke tests and later unit tests
-├── external/              # Optional local clone of course sources (ignored by git)
-├── SETUP_GUIDE.md         # Terminal commands for GitHub setup
-├── requirements.txt       # Python dependencies
-├── environment.yml        # Conda environment alternative
-├── pyproject.toml         # Package metadata and tool config
-└── Makefile               # Build/test helper commands
+src/fys5419_project_2/
+  quantum_state.py      NumPy state-vector simulator, gates, CNOT, measurement
+  model.py              Encoders, ansaetze, probabilities, loss, gradients
+  data.py               Iris and Breast Cancer data loading and scaling
+  optimizers.py         Adam and gradient-descent training
+  baselines.py          Logistic-regression baseline
+
+scripts/
+  run_iris_experiment.py             Main Iris experiment
+  run_variation_study.py             Encoder/ansatz comparison
+  run_breast_cancer_experiment.py    Optional Breast Cancer extension
+  check_parameter_shift.py           Explicit parameter-shift check
+  run_repeated_seed_study.py         Robustness over random seeds/splits
+  run_shot_noise_study.py            Finite-shot measurement study
+  render_robustness_latex_tables.py  Creates LaTeX robustness tables
+
+tests/                    Unit tests and smoke tests
+figures/                  Generated figures used in the report
+results/                  Selected metrics and result summaries
+report/                   Scientific report PDF and LaTeX source
 ```
 
-## Project paths
+## Setup
 
-The official brief asks you to select one project path. The skeleton supports all four paths, with placeholders for:
-
-1. Quantum Fourier Transform and Quantum Phase Estimation
-2. Quantum Machine Learning on Iris / Breast Cancer data
-3. Variational Quantum Boltzmann Machines
-4. Adaptive VQE / eigenvalue problems
-
-Once you decide which path to submit, delete or ignore the unused sections in `report/main.tex` and the unused code skeletons in `src/fys5419_project_2/`.
-
-## Recommended workflow
-
-1. Read `docs/FYS5419_Project_2_Project_Description.pdf`.
-2. Choose one project path.
-3. Put mathematical derivations and written work in `report/main.tex`.
-4. Put reusable code in `src/fys5419_project_2/`.
-5. Put small experiment scripts in `scripts/`.
-6. Save final plots in `results/figures/` and tables in `results/tables/`.
-7. Build the final report PDF with `make pdf`.
-
-## Useful commands
+From the repository root:
 
 ```bash
-make install      # install package in editable mode
-make test         # run tests
-make pdf          # build report/main.pdf
-make clean        # remove LaTeX build files
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
-## Course source links
+## Tests
 
-- Course repository: https://github.com/CompPhysics/QuantumComputingMachineLearning
-- Project 2 folder: https://github.com/CompPhysics/QuantumComputingMachineLearning/tree/gh-pages/doc/Projects/2026/Project2
-- Project 2 LaTeX source: https://github.com/CompPhysics/QuantumComputingMachineLearning/blob/gh-pages/doc/Projects/2026/Project2/pdf/Project2.tex
-
-## Notes on Qiskit
-
-The project text contains older examples such as `qk.execute` and `qk.Aer`. With current Qiskit/Aer installations, it is usually safer to import the simulator from `qiskit_aer`, for example:
-
-```python
-from qiskit_aer import AerSimulator
+```bash
+pytest -q
 ```
 
-Update the example code accordingly when you implement the project.
+or:
+
+```bash
+make test
+```
+
+## Reproduce the main experiments
+
+```bash
+python scripts/run_iris_experiment.py --features 4 --layers 2 --epochs 20 --learning-rate 0.05 --verbose
+python scripts/run_variation_study.py --features 4 --layers 2 --epochs 20 --learning-rate 0.05
+python scripts/run_breast_cancer_experiment.py --features 4 --layers 2 --epochs 20 --learning-rate 0.03 --verbose
+python scripts/make_report_figures.py
+```
+
+Equivalent Makefile commands:
+
+```bash
+make iris
+make variation
+make breast
+```
+
+## Robustness and finite-shot studies
+
+```bash
+python scripts/run_repeated_seed_study.py --features 4 --layers 2 --epochs 20 --learning-rate 0.05 --n-seeds 10
+python scripts/run_shot_noise_study.py --features 4 --layers 2 --epochs 20 --learning-rate 0.05 --shots 100 1000 10000 --repeats 30
+python scripts/render_robustness_latex_tables.py
+```
+
+or:
+
+```bash
+make robustness
+```
+
+These commands write additional result files to `results/`, figures to `figures/`, and a compact LaTeX table file to `report/robustness_tables.tex`.
+
+## Report
+
+The final report is in:
+
+```text
+report/project2_report.pdf
+report/project2_report.tex
+```
+
+To compile locally:
+
+```bash
+cd report
+pdflatex project2_report.tex
+pdflatex project2_report.tex
+cd ..
+```
+
+## Interpretation
+
+The correct conclusion is conservative: the quantum classifiers can be implemented transparently and can learn useful binary classifiers, but logistic regression remains a very strong baseline on these small classical data sets. The results demonstrate sensitivity to feature maps and ansaetze, not quantum advantage.
