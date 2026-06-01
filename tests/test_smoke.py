@@ -1,19 +1,41 @@
 import numpy as np
 
-from fys5419_project_2.hamiltonians import exact_eigenvalues, one_qubit_hamiltonian
-from fys5419_project_2.qft import is_unitary, qft_matrix
-from fys5419_project_2.qpe import phase_from_bitstring
+from fys5419_project_2.data import load_binary_iris_data
+from fys5419_project_2.model import QuantumCircuitClassifier
+from fys5419_project_2.optimizers import train_adam
 
 
-def test_qft_matrix_unitary():
-    assert is_unitary(qft_matrix(3))
+def test_qml_smoke_pipeline_runs():
+    split = load_binary_iris_data(
+        n_features=2,
+        test_size=0.25,
+        random_state=42,
+    )
 
+    model = QuantumCircuitClassifier(
+        n_qubits=2,
+        n_layers=1,
+        encoding="ry",
+        ansatz="simple",
+    )
 
-def test_phase_from_bitstring():
-    assert phase_from_bitstring("01") == 0.25
-    assert phase_from_bitstring("10") == 0.5
+    theta0 = model.initial_parameters(seed=7)
 
+    probabilities = model.predict_proba(split.X_test[:5], theta0)
+    assert probabilities.shape == (5,)
+    assert np.all((0.0 <= probabilities) & (probabilities <= 1.0))
 
-def test_one_qubit_hamiltonian_eigenvalues():
-    h = one_qubit_hamiltonian(1.0, 2.0)
-    assert np.allclose(exact_eigenvalues(h), [1.0, 2.0])
+    result = train_adam(
+        model,
+        split.X_train[:8],
+        split.y_train[:8],
+        theta0,
+        X_val=split.X_test[:4],
+        y_val=split.y_test[:4],
+        epochs=2,
+        learning_rate=0.05,
+    )
+
+    assert result.theta.shape == theta0.shape
+    assert len(result.history) == 2
+    assert np.isfinite(result.history[-1]["train_loss"])
