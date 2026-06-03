@@ -8,7 +8,6 @@
 \usepackage{geometry}
 \usepackage{amsmath,amssymb,amsfonts,bm}
 \usepackage{graphicx}
-\usepackage{multicol}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{tabularx}
@@ -32,7 +31,7 @@
 \hypersetup{colorlinks=true, linkcolor=linkcolor, citecolor=linkcolor, urlcolor=linkcolor, breaklinks=true}
 \pagestyle{plain}
 \setlist[itemize]{leftmargin=*, topsep=1pt, itemsep=1pt}
-\lstset{basicstyle=\ttfamily\small, breaklines=true, frame=single, columns=fullflexible, keepspaces=true, showstringspaces=false, backgroundcolor=\color{gray!5}}
+\lstset{basicstyle=\ttfamily\footnotesize, breaklines=true, frame=single, columns=fullflexible, keepspaces=true, showstringspaces=false, backgroundcolor=\color{gray!5}}
 
 % -------------------- Commands --------------------
 \newcommand{\ket}[1]{\left|#1\right\rangle}
@@ -325,25 +324,56 @@ The basic \code{h\_rz}/simple quantum classifier reached 0.84 test accuracy on t
 
 The main lesson is not quantum advantage. The main lesson is that parameterized quantum classifiers can be built and trained transparently, that the parameter-shift rule gives a practical analytical gradient, and that feature-map and ansatz choices strongly affect performance. Future work should test more random splits, more circuit depths, more classical baselines, noisy training, and data sets where linear decision boundaries are not already sufficient.
 
+\appendix
+\section{Reproducibility and code organization}
+Reproducibility was treated as part of the numerical method. The commands below start from a clean virtual environment, install the package in editable mode, run the test suite, and then execute the scripts used to generate the selected tables and figures. The experiment parameters are given as command-line arguments rather than hidden in the source code. This makes the number of features, layers, epochs, learning rate, repeated seeds, and measurement shots directly visible.
 
+The main commands used to reproduce the selected results are:
+\begin{lstlisting}
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install -e .
+pytest -q
+python scripts/run_iris_experiment.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05 --verbose
+python scripts/run_variation_study.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05
+python scripts/run_repeated_seed_study.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05
+python scripts/run_shot_noise_study.py --features 4 \
+  --layers 2 --epochs 20 --learning-rate 0.05 \
+  --shots 100 1000 10000 --repeats 30
+python scripts/run_breast_cancer_experiment.py \
+  --features 4 --layers 2 --epochs 20 \
+  --learning-rate 0.03 --verbose
+\end{lstlisting}
+The scripts write numerical summaries to \code{results/} and plots to \code{figures/}. The repeated-seed script checks sensitivity to train/test splits and initialization, while the shot-noise script isolates measurement noise by sampling from fixed state-vector probabilities.
 
-\section*{Appendix: Use of AI/LLM Tools}
-\addcontentsline{toc}{section}{Appendix: Use of AI/LLM Tools}
+\newpage
+A simplified repository overview is:
+\begin{lstlisting}
+FYS5419_Project_2/
+  src/fys5419_project_2/
+    quantum_state.py
+    model.py
+    data.py
+    optimizers.py
+    baselines.py
+  scripts/
+    run_iris_experiment.py
+    run_variation_study.py
+    run_repeated_seed_study.py
+    run_shot_noise_study.py
+    run_breast_cancer_experiment.py
+  tests/
+  figures/
+  results/
+  report/
+\end{lstlisting}
+The separation between \code{src/}, \code{scripts/}, \code{results/}, and \code{report/} is intentional: reusable implementation code, reproducibility commands, generated output, and final manuscript files can be inspected independently.
 
-ChatGPT was used as a limited supporting tool during this project. The tool was used during parts of the project work in 2026 through the ChatGPT web interface. The implementation, numerical experiments, figures, tables, and final scientific interpretation are my own responsibility.
-
-For the code, ChatGPT was used mainly for support while developing and cleaning the project. This included help with discussing repository organization, interpreting terminal errors, checking Git and \LaTeX{} commands, improving file names and structure, and making comments and code organization easier to read. I also used ChatGPT for debugging support and for suggestions about useful consistency checks. All code suggestions were reviewed before use, and the submitted code was tested by running the project workflow and unit tests.
-
-For the written report, ChatGPT was used as a language and feedback tool. It helped with proofreading, improving wording, checking notation consistency, and giving feedback on whether the report addressed the course evaluation criteria. I reviewed and edited the suggestions before including them in the final text.
-
-For text assistance, level 0 means no LLM assistance, level 1 means language-only assistance, level 2 means editorial assistance, and level 3 means generative drafting. In this report the assistance was mainly level 1, with some level 2 editorial feedback for the AI declaration and general report structure. No report section was included without my own review and approval.
-
-For code assistance, level 0 means no LLM assistance, level 1 means debugging or explanation assistance, level 2 means short snippets or small blocks, level 3 means skeleton generation, and level 4 means substantial file-level generation. In this project the assistance was mainly level 1--2: debugging support, command checking, code cleanup suggestions, comments, naming, and short code suggestions. ChatGPT was not used to fabricate numerical results, choose final data, or replace my own calculations and scientific interpretation.
-
-All reported values were generated by running the project code in the GitHub repository. The numerical results were checked against exact diagonalization, analytic limits, unit tests, or other relevant consistency checks. I take responsibility for the submitted code, figures, tables, numerical values, and scientific interpretation, and I can explain the equations, algorithms, and results used in the final submission.
-
-
-\begin{thebibliography}{9}
+\begin{thebibliography}{7}
 \bibitem{nielsenchuang}
 M. A. Nielsen and I. L. Chuang, \textit{Quantum Computation and Quantum Information}, Cambridge University Press, Cambridge (2000).
 
@@ -364,17 +394,6 @@ D. P. Kingma and J. Ba, ``Adam: A method for stochastic optimization,'' Internat
 
 \bibitem{project}
 Computational Physics, ``FYS5419/FYS9419 Project 2: Quantum Computing and Quantum Machine Learning,'' University of Oslo, Spring 2026. \url{https://github.com/CompPhysics/QuantumComputingMachineLearning/tree/gh-pages/doc/Projects/2026/Project2}
-
-\bibitem{grading}
-Computational Physics, ``Evaluation and grading of projects,'' University of Oslo. \url{https://github.com/CompPhysics/QuantumComputingMachineLearning/tree/gh-pages/doc/Projects/EvaluationGrading}
-
-\bibitem{examples}
-Computational Physics, ``Project examples and report-writing resources,'' University of Oslo. \url{https://github.com/CompPhysics/QuantumComputingMachineLearning/tree/gh-pages/doc/Projects/ProjectExamples}
 \end{thebibliography}
-
-
-
-\clearpage
-\input{ai_declaration}
 
 \end{document}
