@@ -1,0 +1,13 @@
+name: FYS5419_Project_2
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10
+  - pip
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - pytest
+  - pip:
+      - -e .

@@ -170,7 +170,7 @@ def plot_variation_study(path: Path, figures_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", default="results")
-    parser.add_argument("--figures-dir", default="figures")
+    parser.add_argument("--figures-dir", default="report/figures")
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)

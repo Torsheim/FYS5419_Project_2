@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "fys5419-project-2"
 version = "0.1.0"
 description = "FYS5419 Project 2: Quantum machine-learning classifier"
-readme = "README_QML.md"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
